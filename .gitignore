@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+rag-env/
+
+# Node
+node_modules/
+dist/
+
+# Env files
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Runtime data
+backend/app/db/*.sqlite
+uploads/
+backend/.mem0_qdrant/
+backend/.mem0_history.db

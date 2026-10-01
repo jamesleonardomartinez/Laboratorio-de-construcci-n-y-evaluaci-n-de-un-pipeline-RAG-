@@ -1,0 +1,76 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: rag-lab-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rag}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rag}
+      POSTGRES_DB: ${POSTGRES_DB:-rag_lab}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/app/db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rag} -d ${POSTGRES_DB:-rag_lab}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: rag-lab-ollama
+    restart: unless-stopped
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rag-lab-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-rag}:${POSTGRES_PASSWORD:-rag}@postgres:5432/${POSTGRES_DB:-rag_lab}
+      LLM_PROVIDER: ${LLM_PROVIDER:-opencode}
+      OPENCODE_API_KEY: ${OPENCODE_API_KEY:-}
+      OPENCODE_BASE_URL: ${OPENCODE_BASE_URL:-https://opencode.ai/zen/go/v1}
+      OPENCODE_MODEL: ${OPENCODE_MODEL:-deepseek-v4.1-flash}
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
+      TEXT_EMBEDDING_MODEL: ${TEXT_EMBEDDING_MODEL:-BAAI/bge-m3}
+      IMAGE_EMBEDDING_MODEL: ${IMAGE_EMBEDDING_MODEL:-google/siglip2-base-patch16-224}
+      WHISPER_MODEL: ${WHISPER_MODEL:-small}
+      VIDEO_FRAME_INTERVAL_SECONDS: ${VIDEO_FRAME_INTERVAL_SECONDS:-10}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - backend_uploads:/data/uploads
+      - model_cache:/root/.cache
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: rag-lab-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://127.0.0.1:8000}
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+
+volumes:
+  postgres_data:
+  ollama_data:
+  backend_uploads:
+  model_cache:
